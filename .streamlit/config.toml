@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+primaryColor = "#0069FF"            # Sesuai 'Primary' Anda (untuk chart/tombol aktif)
+backgroundColor = "#C6DDFF"         # Sesuai 'Background' Anda
+secondaryBackgroundColor = "#FFF5F8" # Sesuai 'Sidebar' Anda
+textColor = "#1D2433"               # Sesuai 'Text Primary' Anda
+font = "sans serif"
