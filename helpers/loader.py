@@ -79,7 +79,7 @@ def load_data() -> pd.DataFrame:
     2. Kolom tambahan: cabang_label, nps_xyz_class, nps_kompetitor_class
     3. Kolom shorthand untuk kolom yang sering dipakai di dashboard
 
-    Gunakan fungsi ini di semua page.
+    Fungsi ini dipanggil sekali oleh app.py dan hasilnya dibagikan ke setiap page.
     """
     df           = load_raw_data().copy()
     mapping_dict = build_metadata_mapping()
@@ -96,44 +96,123 @@ def load_data() -> pd.DataFrame:
             df[f"{label_col}_label"] = df[col_name].map(decoder)
 
     # ── Kolom shorthand (untuk kemudahan akses di page) ──────────────────────
-    df["provinsi_label"]    = df["provinsi_label"]   if "provinsi_label"    in df.columns else None
-    df["gender_label"]      = df["jenis_kelamin_label"]
-    df["usia_label"] = (
-        df["range_usia_label"]
-        .astype(str)
-        .str.replace("Tahun", "Years")
-        .str.replace("tahun", "Years")
-        .str.replace("ke atas", "Above", regex=False)
+    df["provinsi_label"] = (
+        df["provinsi_label"] if "provinsi_label" in df.columns else None
+    )
+
+    df["gender_label"] = (
+        df["jenis_kelamin_label"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .replace({
+            "pria": "Male",
+            "laki-laki": "Male",
+            "laki laki": "Male",
+            "male": "Male",
+            "wanita": "Female",
+            "perempuan": "Female",
+            "female": "Female",
+        })
     )
 
     df["usia_label"] = (
-        df["usia_label"]
+        df["range_usia_label"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
         .replace({
-            "50 Years Above": "Above 50 Years",
-            "17 - 19 Years": "17–19 Years",
-            "20 - 25 Years": "20–25 Years",
-            "26 - 30 Years": "26–30 Years",
-            "31 - 35 Years": "31–35 Years",
-            "36 - 40 Years": "36–40 Years",
-            "41 - 45 Years": "41–45 Years",
-            "46 - 50 Years": "46–50 Years"
+            "17 - 19 tahun": "17–19 Years",
+            "17-19 tahun": "17–19 Years",
+            "17 -19 tahun": "17–19 Years",
+            "20 - 25 tahun": "20–25 Years",
+            "20-25 tahun": "20–25 Years",
+            "26 - 30 tahun": "26–30 Years",
+            "26-30 tahun": "26–30 Years",
+            "31 - 35 tahun": "31–35 Years",
+            "31-35 tahun": "31–35 Years",
+            "36 - 40 tahun": "36–40 Years",
+            "36-40 tahun": "36–40 Years",
+            "41 - 45 tahun": "41–45 Years",
+            "41-45 tahun": "41–45 Years",
+            "46 - 50 tahun": "46–50 Years",
+            "46-50 tahun": "46–50 Years",
+            "50 tahun dan ke atas": "Above 50 Years",
+            "50 tahun ke atas": "Above 50 Years",
+            "di atas 50 tahun": "Above 50 Years",
         })
     )
 
     df["tenure_label"] = (
         df["sudah_berapa_lamakah_menjadi_nasabah_bank_xyz_label"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
         .replace({
-            "< 1 tahun":"< 1 Year",
-            "1 - 2 tahun":"1–2 Years",
-            "3 - 4 tahun":"3–4 Years",
-            "5 tahun atau lebih":"5 Years or More"
+            "kurang dari 1 tahun": "Less than 1 year",
+            "di bawah 1 tahun": "Less than 1 year",
+            "dibawah 1 tahun": "Less than 1 year",
+            "< 1 tahun": "Less than 1 year",
+            "1 tahun": "1 year",
+            "1 - 2 tahun": "1–2 years",
+            "1-2 tahun": "1–2 years",
+            "2 - 3 tahun": "2–3 years",
+            "2-3 tahun": "2–3 years",
+            "3 - 5 tahun": "3–5 years",
+            "3-5 tahun": "3–5 years",
+            "4 - 5 tahun": "4–5 years",
+            "4-5 tahun": "4–5 years",
+            "5 - 10 tahun": "5–10 years",
+            "5-10 tahun": "5–10 years",
+            "5 tahun atau lebih": "5 years or more",
+            "5 tahun atau lebih ": "5 years or more",
+            "5 tahun ke atas": "5 years or more",
+            "lebih dari 5 tahun": "More than 5 years",
+            "> 5 tahun": "More than 5 years",
+            "lebih dari 10 tahun": "More than 10 years",
+            "10 tahun ke atas": "More than 10 years",
+            "> 10 tahun": "More than 10 years",
+            "less than 1 year": "Less than 1 year",
+            "1 year": "1 year",
+            "1–2 years": "1–2 years",
+            "2–3 years": "2–3 years",
+            "3–5 years": "3–5 years",
+            "4–5 years": "4–5 years",
+            "5–10 years": "5–10 years",
+            "5 years or more": "5 years or more",
+            "more than 5 years": "More than 5 years",
+            "more than 10 years": "More than 10 years",
         })
     )
-    df["panel_label"]       = df["panel_transaksi_label"]
-    df["pekerjaan_label"]   = df["pekerjaan_label"]   if "pekerjaan_label"   in df.columns else None
-    df["pendidikan_label"]  = df["pendidikan_label"]  if "pendidikan_label"  in df.columns else None
-    df["ses_pengeluaran_label"] = df["rata_rata_pengeluaran_rutin_per_bulannya_label"]
-    df["ses_penghasilan_label"] = df["rata_rata_penghasilan_rumah_tangga_per_bulannya_label"]
+    df["panel_label"] = df["panel_transaksi_label"]
+    df["pekerjaan_label"] = (
+        df["pekerjaan_label"] if "pekerjaan_label" in df.columns else None
+    )
+    df["pendidikan_label"] = (
+        df["pendidikan_label"] if "pendidikan_label" in df.columns else None
+    )
+    df["ses_pengeluaran_label"] = df[
+        "rata_rata_pengeluaran_rutin_per_bulannya_label"
+    ]
+    df["ses_penghasilan_label"] = df[
+        "rata_rata_penghasilan_rumah_tangga_per_bulannya_label"
+    ]
+
+    if "kategori_nasabah_label" in df.columns:
+        df["kategori_nasabah_label"] = (
+            df["kategori_nasabah_label"]
+            .astype("string")
+            .str.strip()
+            .str.lower()
+            .replace({
+                "nasabah prioritas": "Priority Customer",
+                "nasabah reguler": "Regular Customer",
+                "nasabah tabungan xyz reguler": "Regular Bank XYZ Savings Customer",
+                "nasabah tabungan bank xyz reguler": "Regular Bank XYZ Savings Customer",
+                "priority customer": "Priority Customer",
+                "regular customer": "Regular Customer",
+            })
+        )
 
     # ── Cabang: title case dari kolom string ─────────────────────────────────
     df["cabang_label"] = df["Nama Kantor Cabang"].str.title()

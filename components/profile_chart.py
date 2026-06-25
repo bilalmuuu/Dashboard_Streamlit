@@ -21,22 +21,22 @@ PRIMARY_100 = "#bb2649"
 PRIMARY_200 = "#f35d74"
 PRIMARY_300 = "#ffc3d4"
 
-ACCENT_100  = "#ffadad"
-ACCENT_200  = "#ffd6a5"
+ACCENT_100 = "#ffadad"
+ACCENT_200 = "#ffd6a5"
 
-TEXT_100    = "#4b4f5d"
-TEXT_200    = "#6a738b"
-BG_100      = "#ffffff" 
-BG_200      = "#f5f5f5" 
-BG_300      = "#cccccc"
+TEXT_100 = "#4b4f5d"
+TEXT_200 = "#6a738b"
+BG_100 = "#ffffff"
+BG_200 = "#f5f5f5"
+BG_300 = "#cccccc"
 
-# Pemetaan Semantik UI
-TEXT_PRIMARY   = TEXT_100
+# Semantic UI mapping
+TEXT_PRIMARY = TEXT_100
 TEXT_SECONDARY = TEXT_200
-GRID_COLOR     = BG_200
-CARD_BG        = BG_100 
-PAGE_BG        = BG_200
-BORDER_COLOR   = BG_300
+GRID_COLOR = BG_200
+CARD_BG = BG_100
+PAGE_BG = BG_200
+BORDER_COLOR = BG_300
 
 # ---------------------------------------------------------------------------
 # 2. DEMOGRAPHIC PROFILE (STACKED BAR CHART)
@@ -60,46 +60,116 @@ def render_gender_age_chart(df):
     </div>
     """, unsafe_allow_html=True)
 
-    chart_df = df.groupby(["usia_label", "gender_label"]).size().reset_index(name="count")
-    chart_df["pct"] = chart_df.groupby("usia_label")["count"].transform(lambda x: (x / x.sum()) * 100)
+    chart_source = df.copy()
 
-    pivot_df = chart_df.pivot(index="usia_label", columns="gender_label", values="pct").fillna(0)
+    chart_source["gender_label"] = (
+        chart_source["gender_label"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .replace({
+            "pria": "Male",
+            "laki-laki": "Male",
+            "laki laki": "Male",
+            "male": "Male",
+            "wanita": "Female",
+            "perempuan": "Female",
+            "female": "Female",
+        })
+    )
+
+    chart_source["usia_label"] = (
+        chart_source["usia_label"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .replace({
+            "17 - 19 tahun": "17–19 Years",
+            "17-19 tahun": "17–19 Years",
+            "17 -19 tahun": "17–19 Years",
+            "17–19 years": "17–19 Years",
+            "20 - 25 tahun": "20–25 Years",
+            "20-25 tahun": "20–25 Years",
+            "20–25 years": "20–25 Years",
+            "26 - 30 tahun": "26–30 Years",
+            "26-30 tahun": "26–30 Years",
+            "26–30 years": "26–30 Years",
+            "31 - 35 tahun": "31–35 Years",
+            "31-35 tahun": "31–35 Years",
+            "31–35 years": "31–35 Years",
+            "36 - 40 tahun": "36–40 Years",
+            "36-40 tahun": "36–40 Years",
+            "36–40 years": "36–40 Years",
+            "41 - 45 tahun": "41–45 Years",
+            "41-45 tahun": "41–45 Years",
+            "41–45 years": "41–45 Years",
+            "46 - 50 tahun": "46–50 Years",
+            "46-50 tahun": "46–50 Years",
+            "46–50 years": "46–50 Years",
+            "50 tahun dan ke atas": "Above 50 Years",
+            "50 tahun ke atas": "Above 50 Years",
+            "di atas 50 tahun": "Above 50 Years",
+            "above 50 years": "Above 50 Years",
+        })
+    )
+
+    chart_df = (
+        chart_source
+        .groupby(["usia_label", "gender_label"])
+        .size()
+        .reset_index(name="count")
+    )
+    chart_df["pct"] = chart_df.groupby("usia_label")["count"].transform(
+        lambda values: (values / values.sum()) * 100
+    )
+
+    pivot_df = chart_df.pivot(
+        index="usia_label",
+        columns="gender_label",
+        values="pct",
+    ).fillna(0)
+
     age_order = [
-        "17 -19 Years", "20 - 25 Years", "26 - 30 Years",
-        "31 - 35 Years", "36 - 40 Years", "41 - 45 Years",
-        "46 - 50 Years", "Above 50 Years"
+        "17–19 Years",
+        "20–25 Years",
+        "26–30 Years",
+        "31–35 Years",
+        "36–40 Years",
+        "41–45 Years",
+        "46–50 Years",
+        "Above 50 Years",
     ]
-    pivot_df = pivot_df.reindex(age_order)
+    pivot_df = pivot_df.reindex(age_order).fillna(0)
 
-    for col in ["pria", "wanita"]:
-        if col not in pivot_df.columns:
-            pivot_df[col] = 0
+    for column in ["Male", "Female"]:
+        if column not in pivot_df.columns:
+            pivot_df[column] = 0
 
     fig = go.Figure()
 
-    # MALE (PRIMARY_100 -> Teks Putih)
+    # Male segment
     fig.add_trace(go.Bar(
         name="Male",
         y=pivot_df.index,
-        x=pivot_df["pria"],
+        x=pivot_df["Male"],
         orientation="h",
         marker=dict(color=PRIMARY_100),
-        text=[f"{v:.0f}%" if v >= 8 else "" for v in pivot_df["pria"]],
+        text=[f"{v:.0f}%" if v >= 8 else "" for v in pivot_df["Male"]],
         textposition="inside",
-        textfont=dict(color=CARD_BG, size=11), 
+        textfont=dict(color=CARD_BG, size=11),
         hovertemplate="<b>Male</b><br>%{y}<br>%{x:.1f}%<extra></extra>"
     ))
 
-    # FEMALE (ACCENT_200 / #ffd6a5 -> Teks Abu Gelap)
+    # Female segment
     fig.add_trace(go.Bar(
         name="Female",
         y=pivot_df.index,
-        x=pivot_df["wanita"],
+        x=pivot_df["Female"],
         orientation="h",
-        marker=dict(color=ACCENT_200), 
-        text=[f"{v:.0f}%" if v >= 8 else "" for v in pivot_df["wanita"]],
+        marker=dict(color=ACCENT_200),
+        text=[f"{v:.0f}%" if v >= 8 else "" for v in pivot_df["Female"]],
         textposition="inside",
-        textfont=dict(color=TEXT_PRIMARY, size=11), 
+        textfont=dict(color=TEXT_PRIMARY, size=11),
         hovertemplate="<b>Female</b><br>%{y}<br>%{x:.1f}%<extra></extra>"
     ))
 
@@ -113,7 +183,7 @@ def render_gender_age_chart(df):
         xaxis=dict(range=[0, 100], ticksuffix="%", tickvals=[0, 25, 50, 75, 100], showgrid=True, gridcolor=GRID_COLOR, zeroline=False, tickfont=dict(size=11, color=TEXT_SECONDARY)),
         yaxis=dict(showgrid=False, tickfont=dict(size=11, color=TEXT_PRIMARY))
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 # ---------------------------------------------------------------------------
@@ -142,9 +212,9 @@ def create_transaction_frequency_chart(df, freq_col="Seberapa Sering Melakukan T
     chart_df.columns = ["frequency", "count"]
     chart_df["pct"] = (chart_df["count"] / chart_df["count"].sum() * 100)
 
-    # PEMBARUAN: 3 warna pertama teks putih, 1 warna terakhir (#ffd6a5) teks gelap
+    # Use the original warm dashboard palette with readable label contrast.
     donut_colors = [PRIMARY_100, PRIMARY_200, ACCENT_100, ACCENT_200]
-    donut_text_colors = [CARD_BG, CARD_BG, CARD_BG, TEXT_PRIMARY] 
+    donut_text_colors = [CARD_BG, CARD_BG, CARD_BG, TEXT_PRIMARY]
 
     fig = go.Figure(go.Pie(
         labels=chart_df["frequency"],
@@ -154,7 +224,7 @@ def create_transaction_frequency_chart(df, freq_col="Seberapa Sering Melakukan T
         text=[f"{pct:.0f}%" if pct >= 5 else "" for pct in chart_df["pct"]],
         textinfo="text",
         textposition="inside",
-        textfont=dict(color=donut_text_colors, size=11), 
+        textfont=dict(color=donut_text_colors, size=11),
         hovertemplate="<b>%{label}</b><br>Respondents: %{value}<br>Percentage: %{percent}<br><extra></extra>"
     ))
 
@@ -164,7 +234,7 @@ def create_transaction_frequency_chart(df, freq_col="Seberapa Sering Melakukan T
         legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center", font=dict(size=11, color=TEXT_SECONDARY)),
         paper_bgcolor=CARD_BG, plot_bgcolor=CARD_BG
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 # ---------------------------------------------------------------------------
@@ -195,19 +265,19 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
     # Income Mapping
     # =========================
     income_mapping = {
-        "Rp. 1.000.001 - Rp. 1.500.000": "≤ Rp 3 Million",
-        "Rp. 1.500.001 - Rp. 2.000.000": "≤ Rp 3 Million",
-        "Rp. 2.000.001 - Rp. 3.000.000": "≤ Rp 3 Million",
-        "Rp. 3.000.001 - Rp. 4.500.000": "Rp 3–6 Million",
-        "Rp. 4.500.000 - Rp 6.000.000": "Rp 3–6 Million",
-        "Rp 6.000.001 - Rp 7.500.000": "Rp 6–10.5 Million",
-        "Rp 7.500.001- Rp 9.000.000": "Rp 6–10.5 Million",
-        "Rp 9.000.001- Rp 10.500.000": "Rp 6–10.5 Million",
-        "Rp 10.500.0001 - Rp 15.000.000": "Rp 10.5–15 Million",
-        "Rp 15.000.001- Rp 20.000.000": "Rp 15–20 Million",
-        "Rp 20.000.001 - Rp 25.000.000": "Rp 20–25 Million",
-        "Di atas Rp 25.000.000": "> Rp 25 Million",
-        "Menolak Memberikan Jawaban": "No Response"
+        "Rp. 1.000.001 - Rp. 1.500.000": "≤ Rp 3 Juta",
+        "Rp. 1.500.001 - Rp. 2.000.000": "≤ Rp 3 Juta",
+        "Rp. 2.000.001 - Rp. 3.000.000": "≤ Rp 3 Juta",
+        "Rp. 3.000.001 - Rp. 4.500.000": "Rp 3–6 Juta",
+        "Rp. 4.500.000 - Rp 6.000.000": "Rp 3–6 Juta",
+        "Rp 6.000.001 - Rp 7.500.000": "Rp 6–10.5 Juta",
+        "Rp 7.500.001- Rp 9.000.000": "Rp 6–10.5 Juta",
+        "Rp 9.000.001- Rp 10.500.000": "Rp 6–10.5 Juta",
+        "Rp 10.500.0001 - Rp 15.000.000": "Rp 10.5–15 Juta",
+        "Rp 15.000.001- Rp 20.000.000": "Rp 15–20 Juta",
+        "Rp 20.000.001 - Rp 25.000.000": "Rp 20–25 Juta",
+        "Di atas Rp 25.000.000": "> Rp 25 Juta",
+        "Menolak Memberikan Jawaban": "Tidak Menjawab"
     }
 
     chart_df = df.copy()
@@ -242,9 +312,8 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
         "#f08ea1",
         "#f6b0bc",
         "#ffd6a5",
-        "#f3e5d0"
+        "#f3e5d0",
     ]
-
     chart_df["color"] = colors[:len(chart_df)]
 
     # =========================
@@ -260,7 +329,7 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
                 colors=chart_df["color"],
                 line=dict(
                     width=2,
-                    color="white"
+                    color="#FFFFFF"
                 )
             ),
 
@@ -276,7 +345,7 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
 
             textfont=dict(
                 size=15,
-                color="white"
+                color="#FFFFFF"
             ),
 
             hovertemplate=
@@ -293,7 +362,7 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
     )
 
     fig.update_layout(
-        height=340, # <--- SUDAH DIREVISI DARI 370 MENJADI 340 AGAR SEJAJAR
+        height=340,
 
         margin=dict(
             l=0,
@@ -313,7 +382,7 @@ def create_income_treemap(df, income_col="ses_penghasilan_label"):
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        width="stretch",
         config={
             "displayModeBar": False
         },
@@ -362,8 +431,8 @@ def create_multibanking_profile_chart(df, bank_col="Bank Mana Saja Yang Saat Ini
     bar_colors = [PRIMARY_100, PRIMARY_200, ACCENT_100, ACCENT_200]
 
     for idx, row in chart_df.iterrows():
-        # PEMBARUAN: idx 0, 1, 2 = Teks Putih; idx 3 (#ffd6a5) = Teks Gelap
-        font_color = CARD_BG if idx < 3 else TEXT_PRIMARY 
+        # Preserve readable contrast across the original warm palette.
+        font_color = CARD_BG if idx < 3 else TEXT_PRIMARY
         fig.add_trace(go.Bar(
             y=[""], x=[row["pct"]], orientation="h", name=row["segment"],
             marker=dict(color=bar_colors[idx]),
@@ -379,7 +448,7 @@ def create_multibanking_profile_chart(df, bank_col="Bank Mana Saja Yang Saat Ini
         xaxis=dict(range=[0, 100], showgrid=False, showticklabels=False, zeroline=False),
         yaxis=dict(showgrid=False, showticklabels=False)
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 # ---------------------------------------------------------------------------
@@ -395,15 +464,15 @@ def create_geomap_distribution(df, city_col="Kab Kota"):
     Geographic Distribution
     </div>
     <div style="font-size:12px;color:{TEXT_SECONDARY};margin-bottom:18px;">
-    Distribution of respondents across Indonesia (Minimalist Choropleth)
+    Distribution of respondents across Indonesia
     </div>
     """, unsafe_allow_html=True)
 
-    # Agregasi Data
+    # Aggregate respondent counts
     map_df = df[city_col].dropna().astype(str).value_counts().reset_index()
     map_df.columns = ["city", "respondents"]
 
-    # Pembersihan String
+    # Normalize city and regency names
     map_df["city_clean"] = map_df["city"].str.upper()
     map_df["city_clean"] = map_df["city_clean"].str.replace("KABUPATEN ", "", regex=False)
     map_df["city_clean"] = map_df["city_clean"].str.replace("KAB. ", "", regex=False)
@@ -428,10 +497,10 @@ def create_geomap_distribution(df, city_col="Kab Kota"):
         with open(geojson_path, "r", encoding="utf-8") as f:
             geojson_data = json.load(f)
     except FileNotFoundError:
-        st.error(f"GeoJSON file not found! Make sure the file is located in: {geojson_path}")
+        st.error(f"GeoJSON file not found. Expected location: {geojson_path}")
         return
 
-    # Pemisahan Layer
+    # Separate active and inactive geographic layers
     geojson_aktif = {"type": "FeatureCollection", "features": []}
     geojson_pasif = {"type": "FeatureCollection", "features": []}
 
@@ -445,41 +514,41 @@ def create_geomap_distribution(df, city_col="Kab Kota"):
         else:
             geojson_pasif['features'].append(feature)
 
-    # Colormap (Dari Pastel ke Merah Tua)
+    # Colormap from light warm tones to deep maroon
     min_resp = map_df["respondents"].min() if not map_df.empty else 0
     max_resp = map_df["respondents"].max() if not map_df.empty else 1
     colormap = cm.LinearColormap(colors=[ACCENT_200, PRIMARY_200, PRIMARY_100], vmin=min_resp, vmax=max_resp)
-    colormap.caption = 'Number of Respondents'
+    colormap.caption = "Respondents"
 
-    # Inisiasi Peta
+    # Initialize the map
     m = folium.Map(location=[-2.59, 118.04], zoom_start=4.5, tiles="CartoDB positron")
 
-    # Layer Pasif (Netral, Tanpa Hover)
+    # Inactive layer: neutral styling without hover
     if geojson_pasif['features']:
         folium.GeoJson(
             geojson_pasif,
             style_function=lambda x: {
-                'fillColor': BG_200, 
-                'color': CARD_BG,    
-                'weight': 0.5,       
-                'fillOpacity': 1.0   
+                'fillColor': BG_200,
+                'color': CARD_BG,
+                'weight': 0.5,
+                'fillOpacity': 1.0
             },
-            tooltip=None 
+            tooltip=None
         ).add_to(m)
 
-    # Layer Aktif (Gradasi Warna, Hover Tooltip)
+    # Active layer: blue gradient with hover details
     if geojson_aktif['features']:
         folium.GeoJson(
             geojson_aktif,
             style_function=lambda feature: {
                 'fillColor': colormap(feature['properties']['Jumlah_Responden']),
-                'color': CARD_BG,       
-                'weight': 1.0,          
-                'fillOpacity': 1.0      
+                'color': CARD_BG,
+                'weight': 1.0,
+                'fillOpacity': 1.0
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=['WADMKK', 'Jumlah_Responden'],
-                aliases=['City/Regency:', 'Number of Customers:'],
+                aliases=["City/Regency:", "Respondents:"],
                 localize=True,
                 style="font-family: Inter, sans-serif; font-size: 13px;"
             )
@@ -487,5 +556,5 @@ def create_geomap_distribution(df, city_col="Kab Kota"):
 
     colormap.add_to(m)
 
-    # Render di Streamlit
+    # Render in Streamlit
     st_folium(m, width="100%", height=450, returned_objects=[])
