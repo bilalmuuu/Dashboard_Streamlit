@@ -195,11 +195,8 @@ def render_competitor_macro_charts(df, df_mapping):
     with col_bar:
         with st.container(key="p3_card_bar"):
             st.markdown(
-                f"""
-                <div style="font-size:16px;font-weight:800;color:{TEXT_PRIMARY};margin-bottom:15px;">
-                    Top 5 Competitor Banks by Primary Savings Account
-                </div>
-                """,
+                f'<div style="font-size:16px;font-weight:800;color:{TEXT_PRIMARY};margin-bottom:12px;">'
+                'Top 5 Competitor Banks by Primary Savings Account</div>',
                 unsafe_allow_html=True,
             )
 
@@ -210,38 +207,58 @@ def render_competitor_macro_charts(df, df_mapping):
                 .reset_index()
             )
             top_5_banks.columns = ["Bank", "Total"]
-            top_5_banks = top_5_banks.sort_values(by="Total", ascending=True)
+            top_5_banks = top_5_banks.sort_values("Total", ascending=True)
 
-            fig_bar = px.bar(
-                top_5_banks,
-                x="Total",
-                y="Bank",
+            max_val = top_5_banks["Total"].max()
+
+            # ── Warna per-batang: peringkat 1 (nilai tertinggi) = merah,
+            #    sisanya = abu-abu — menggunakan go.Bar agar bisa assign per-bar ──
+            bar_colors = [
+                PRIMARY_100 if v == max_val else BG_300
+                for v in top_5_banks["Total"]
+            ]
+            text_colors = [
+                TEXT_PRIMARY if v == max_val else TEXT_SECONDARY
+                for v in top_5_banks["Total"]
+            ]
+
+            fig_bar = go.Figure(go.Bar(
+                x=top_5_banks["Total"],
+                y=top_5_banks["Bank"],
                 orientation="h",
-                text="Total",
-                color_discrete_sequence=[PRIMARY_100],
-            )
-
-            fig_bar.update_traces(
+                text=top_5_banks["Total"],
                 textposition="outside",
-                textfont=dict(size=13, weight="bold", color=TEXT_PRIMARY),
-                marker=dict(line=dict(width=0)),
+                cliponaxis=False,
+                textfont=dict(size=12, color=TEXT_PRIMARY, family="Inter"),
+                marker=dict(
+                    color=bar_colors,
+                    line=dict(width=0),
+                    cornerradius=6,
+                ),
                 hovertemplate="<b>%{y}</b><br>Respondents: %{x}<extra></extra>",
-            )
+            ))
 
             fig_bar.update_layout(
-                height=341,
-                margin=dict(l=0, r=30, t=10, b=0),
+                height=345,
+                bargap=0.28,
+                margin=dict(l=0, r=50, t=0, b=0),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False, showticklabels=False, title=""),
+                xaxis=dict(
+                    title="",
+                    showgrid=False,
+                    showticklabels=False,
+                    showline=False,
+                    zeroline=False,
+                    range=[0, max_val * 1.18],   # ruang label di kanan
+                ),
                 yaxis=dict(
                     title="",
-                    tickfont=dict(size=13, color=TEXT_PRIMARY, weight="bold"),
+                    tickfont=dict(size=12, color=TEXT_PRIMARY, weight="bold"),
+                    automargin=True,
                 ),
             )
-            st.plotly_chart(
-                fig_bar, use_container_width=True, config={"displayModeBar": False}
-            )
+            st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
     with col_radar:
         with st.container(key="p3_card_radar"):
