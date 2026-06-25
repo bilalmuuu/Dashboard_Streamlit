@@ -57,7 +57,7 @@ NPS_COL = "Nps Bank Xyz"
 BRANCH_COL = "Nama Kantor Cabang"
 
 # ---------------------------------------------------------------------------
-# 2. DATA PROCESSING: CSI & NPS CALCULATION
+# 2. DATA PROCESSING: CSI & NPS CALCULATION (ANTI-BUG PANDAS VERSION)
 # ---------------------------------------------------------------------------
 @st.cache_data
 def calculate_branch_performance(df, df_mapping):
@@ -74,24 +74,39 @@ def calculate_branch_performance(df, df_mapping):
     if not valid_harapan or not valid_realita:
         return pd.DataFrame()
 
-    national_harapan_mean = df[valid_harapan].apply(pd.to_numeric, errors='coerce').mean()
+    # ANTI-BUG: Gunakan .mask() dan .isin() untuk menghindari error replace()
+    harapan_num = df[valid_harapan].apply(pd.to_numeric, errors='coerce')
+    df_clean_harapan = harapan_num.mask(harapan_num.isin([99, 999, 99.0, 999.0]))
+    national_harapan_mean = df_clean_harapan.mean()
+    
     total_harapan = national_harapan_mean.sum()
-    weight_factors = national_harapan_mean / total_harapan
+    weight_factors = national_harapan_mean / total_harapan if total_harapan > 0 else national_harapan_mean * 0
 
     branch_stats = []
     grouped = df.groupby(BRANCH_COL)
 
     for branch, group in grouped:
-        realita_mean = group[valid_realita].apply(pd.to_numeric, errors='coerce').mean()
+        # ANTI-BUG: Bersihkan 99/999 menggunakan .mask()
+        realita_num = group[valid_realita].apply(pd.to_numeric, errors='coerce')
+        group_clean_realita = realita_num.mask(realita_num.isin([99, 999, 99.0, 999.0]))
+        
+        realita_mean = group_clean_realita.mean()
         realita_mean.index = valid_harapan
-        csi_score = (realita_mean * weight_factors).sum() * 20
+        
+        raw_weighted_csi = (realita_mean * weight_factors).sum()
+        
+        # Konversi ke persentase skala 1-6
+        csi_score = ((raw_weighted_csi - 1) / 5) * 100 if raw_weighted_csi >= 1 else 0
 
         nps_score = 0
         if NPS_COL in group.columns:
-            nps_data = pd.to_numeric(group[NPS_COL], errors='coerce').dropna()
-            if len(nps_data) > 0:
-                promoters = len(nps_data[nps_data >= 9]) / len(nps_data)
-                detractors = len(nps_data[nps_data <= 6]) / len(nps_data)
+            # ANTI-BUG NPS
+            nps_num = pd.to_numeric(group[NPS_COL], errors='coerce')
+            nps_clean = nps_num.mask(nps_num.isin([99, 999, 99.0, 999.0])).dropna()
+            
+            if len(nps_clean) > 0:
+                promoters = len(nps_clean[nps_clean >= 9]) / len(nps_clean)
+                detractors = len(nps_clean[nps_clean <= 6]) / len(nps_clean)
                 nps_score = (promoters - detractors) * 100
 
         branch_stats.append({
@@ -237,7 +252,6 @@ def render_controls_2b(df, df_mapping):
 
     col_cat, col_search = st.columns([1, 2], gap="large")
     with col_cat:
-        # Remove the optional suffix from the displayed category label only.
         selected_category = st.selectbox(
             "📂 Touchpoint Category",
             categories,
@@ -267,7 +281,10 @@ def render_touchpoint_heatmap(df, df_mapping, selected_branches, selected_catego
     for tp, label in valid_pairs:
         row = {"Touchpoint": label}
         for branch in selected_branches:
-            score = df[df[BRANCH_COL] == branch][tp].apply(pd.to_numeric, errors='coerce').mean()
+            # ANTI-BUG Heatmap
+            raw_scores = df[df[BRANCH_COL] == branch][tp].apply(pd.to_numeric, errors='coerce')
+            raw_scores_clean = raw_scores.mask(raw_scores.isin([99, 999, 99.0, 999.0]))
+            score = raw_scores_clean.mean()
             row[branch] = round(score, 2)
         matrix.append(row)
 
@@ -303,7 +320,6 @@ def render_touchpoint_heatmap(df, df_mapping, selected_branches, selected_catego
                 """, unsafe_allow_html=True)
 
 def render_friction_alert(df, selected_branches):
-    # Title and reading guide
     st.markdown(f"""
     <div style="font-size:18px;font-weight:800;color:{TEXT_PRIMARY};margin-top:20px;margin-bottom:4px;">
         Queue Friction Time (Real Emotion Analysis)
@@ -327,25 +343,26 @@ def render_friction_alert(df, selected_branches):
     for branch in selected_branches:
         branch_df = df[df[BRANCH_COL] == branch]
 
-        # Calculate branch averages
-        avg_t_wait = pd.to_numeric(branch_df[t_wait], errors='coerce').mean()
-        avg_t_tol = pd.to_numeric(branch_df[t_tol], errors='coerce').mean()
-        avg_cs_wait = pd.to_numeric(branch_df[cs_wait], errors='coerce').mean()
-        avg_cs_tol = pd.to_numeric(branch_df[cs_tol], errors='coerce').mean()
+        # ANTI-BUG SLA Waktu Antrean
+        branch_df_num = branch_df[[t_wait, t_tol, cs_wait, cs_tol]].apply(pd.to_numeric, errors='coerce')
+        branch_df_clean = branch_df_num.mask(branch_df_num.isin([99, 999, 99.0, 999.0]))
+        
+        avg_t_wait = branch_df_clean[t_wait].mean()
+        avg_t_tol = branch_df_clean[t_tol].mean()
+        avg_cs_wait = branch_df_clean[cs_wait].mean()
+        avg_cs_tol = branch_df_clean[cs_tol].mean()
 
         if pd.isna(avg_t_wait): avg_t_wait = 0
         if pd.isna(avg_t_tol): avg_t_tol = 1
         if pd.isna(avg_cs_wait): avg_cs_wait = 0
         if pd.isna(avg_cs_tol): avg_cs_tol = 1
 
-        # Calculate queue friction
         friction_teller = avg_t_wait - avg_t_tol
         friction_cs = avg_cs_wait - avg_cs_tol
 
         max_t = max(avg_t_wait, avg_t_tol) * 1.3
         max_cs = max(avg_cs_wait, avg_cs_tol) * 1.3
 
-        # Branch header
         st.markdown(f"""
         <div style="font-size:16px; font-weight:800; color:{TEXT_PRIMARY}; border-bottom:2px solid {GRID_COLOR}; padding-bottom:8px; margin-top:10px;">
             🏢 Branch: {branch}
@@ -354,88 +371,30 @@ def render_friction_alert(df, selected_branches):
 
         fig = go.Figure()
 
-        # ---------------------------------------------------------
-        # BULLET CHART TELLER
-        # ---------------------------------------------------------
         t_color = NEGATIVE_COLOR if friction_teller > 0 else POSITIVE_COLOR
-
         fig.add_trace(go.Indicator(
-            mode = "number+gauge+delta",
-            value = avg_t_wait,
+            mode = "number+gauge+delta", value = avg_t_wait,
             number = {'suffix': " min", 'font': {'size': 24, 'color': t_color, 'weight': 'bold'}},
-            delta = {
-                'reference': avg_t_tol,
-                'position': "right",
-                'increasing': {'color': NEGATIVE_COLOR},
-                'decreasing': {'color': POSITIVE_COLOR},
-                'font': {'size': 13}
-            },
+            delta = {'reference': avg_t_tol, 'position': "right", 'increasing': {'color': NEGATIVE_COLOR}, 'decreasing': {'color': POSITIVE_COLOR}, 'font': {'size': 13}},
             domain = {'x': [0.2, 1], 'y': [0.65, 0.95]},
-            # Add spacing between the metric title and tolerance label.
-            title = {
-                'text': f"<b>TELLER</b><br><span style='font-size:6px;'><br></span><span style='color:{TEXT_SECONDARY}; font-size:12px; font-weight:normal;'>Tolerance: {avg_t_tol:.1f} min</span>",
-                'align': "left",
-                'font': {'size': 15, 'color': TEXT_PRIMARY}
-            },
-            gauge = {
-                'shape': "bullet",
-                'axis': {'range': [0, max_t], 'tickfont': {'color': TEXT_SECONDARY}, 'ticksuffix': "m"},
-                'threshold': {'line': {'color': "#1D2433", 'width': 4}, 'thickness': 0.8, 'value': avg_t_tol},
-                'bar': {'color': t_color, 'thickness': 0.5},
-                'steps': [
-                    {'range': [0, avg_t_tol], 'color': "#eefaf2"},
-                    {'range': [avg_t_tol, max_t], 'color': "#ffeef0"}
-                ]
-            }
+            title = {'text': f"<b>TELLER</b><br><span style='font-size:6px;'><br></span><span style='color:{TEXT_SECONDARY}; font-size:12px; font-weight:normal;'>Tolerance: {avg_t_tol:.1f} min</span>", 'align': "left", 'font': {'size': 15, 'color': TEXT_PRIMARY}},
+            gauge = {'shape': "bullet", 'axis': {'range': [0, max_t], 'tickfont': {'color': TEXT_SECONDARY}, 'ticksuffix': "m"}, 'threshold': {'line': {'color': "#1D2433", 'width': 4}, 'thickness': 0.8, 'value': avg_t_tol}, 'bar': {'color': t_color, 'thickness': 0.5}, 'steps': [{'range': [0, avg_t_tol], 'color': "#eefaf2"}, {'range': [avg_t_tol, max_t], 'color': "#ffeef0"}]}
         ))
 
-        # ---------------------------------------------------------
-        # BULLET CHART CS
-        # ---------------------------------------------------------
         cs_color = NEGATIVE_COLOR if friction_cs > 0 else POSITIVE_COLOR
-
         fig.add_trace(go.Indicator(
-            mode = "number+gauge+delta",
-            value = avg_cs_wait,
+            mode = "number+gauge+delta", value = avg_cs_wait,
             number = {'suffix': " min", 'font': {'size': 24, 'color': cs_color, 'weight': 'bold'}},
-            delta = {
-                'reference': avg_cs_tol,
-                'position': "right",
-                'increasing': {'color': NEGATIVE_COLOR},
-                'decreasing': {'color': POSITIVE_COLOR},
-                'font': {'size': 13}
-            },
+            delta = {'reference': avg_cs_tol, 'position': "right", 'increasing': {'color': NEGATIVE_COLOR}, 'decreasing': {'color': POSITIVE_COLOR}, 'font': {'size': 13}},
             domain = {'x': [0.2, 1], 'y': [0.1, 0.4]},
-            # Add spacing between the metric title and tolerance label.
-            title = {
-                'text': f"<b>CS</b><br><span style='font-size:6px;'><br></span><span style='color:{TEXT_SECONDARY}; font-size:12px; font-weight:normal;'>Tolerance: {avg_cs_tol:.1f} min</span>",
-                'align': "left",
-                'font': {'size': 15, 'color': TEXT_PRIMARY}
-            },
-            gauge = {
-                'shape': "bullet",
-                'axis': {'range': [0, max_cs], 'tickfont': {'color': TEXT_SECONDARY}, 'ticksuffix': "m"},
-                'threshold': {'line': {'color': "#1D2433", 'width': 4}, 'thickness': 0.8, 'value': avg_cs_tol},
-                'bar': {'color': cs_color, 'thickness': 0.5},
-                'steps': [
-                    {'range': [0, avg_cs_tol], 'color': "#eefaf2"},
-                    {'range': [avg_cs_tol, max_cs], 'color': "#ffeef0"}
-                ]
-            }
+            title = {'text': f"<b>CS</b><br><span style='font-size:6px;'><br></span><span style='color:{TEXT_SECONDARY}; font-size:12px; font-weight:normal;'>Tolerance: {avg_cs_tol:.1f} min</span>", 'align': "left", 'font': {'size': 15, 'color': TEXT_PRIMARY}},
+            gauge = {'shape': "bullet", 'axis': {'range': [0, max_cs], 'tickfont': {'color': TEXT_SECONDARY}, 'ticksuffix': "m"}, 'threshold': {'line': {'color': "#1D2433", 'width': 4}, 'thickness': 0.8, 'value': avg_cs_tol}, 'bar': {'color': cs_color, 'thickness': 0.5}, 'steps': [{'range': [0, avg_cs_tol], 'color': "#eefaf2"}, {'range': [avg_cs_tol, max_cs], 'color': "#ffeef0"}]}
         ))
 
-        fig.update_layout(
-            height=200,
-            margin=dict(l=10, r=40, t=20, b=10),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-
+        fig.update_layout(height=200, margin=dict(l=10, r=40, t=20, b=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-        # Executive summary
         insight_html = ""
-
         if friction_teller > 0:
             insight_html += f"<div style='margin-bottom:6px;'>🔴 <b>Teller:</b> Above tolerance by <b style='color:{NEGATIVE_COLOR};'>{friction_teller:.1f} minutes</b>.</div>"
         else:
@@ -449,8 +408,6 @@ def render_friction_alert(df, selected_branches):
         st.markdown(f"""
         <div style="background-color:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:35px;">
             <div style="font-size:12px; font-weight:700; color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Branch Summary — {branch}</div>
-            <div style="font-size:14px; color:{TEXT_PRIMARY}; line-height:1.5;">
-                {insight_html}
-            </div>
+            <div style="font-size:14px; color:{TEXT_PRIMARY}; line-height:1.5;">{insight_html}</div>
         </div>
         """, unsafe_allow_html=True)
