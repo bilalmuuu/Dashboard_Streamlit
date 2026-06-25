@@ -9,8 +9,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
-import base64
-import os
 
 # ---------------------------------------------------------------------------
 # 1. CORPORATE DESIGN SYSTEM & COLOR PALETTE
@@ -35,65 +33,6 @@ BORDER_COLOR   = BG_300
 
 NPS_COL = "Nps Bank Xyz"
 BRANCH_COL = "Nama Kantor Cabang"
-
-# ---------------------------------------------------------------------------
-# DATA CLEANING : REPLACE INVALID LIKERT VALUES (99 / 999)
-# ---------------------------------------------------------------------------
-
-LIKERT_MIN = 1
-LIKERT_MAX = 6
-
-EXCLUDED_COLUMNS = {
-    NPS_COL,
-    BRANCH_COL,
-    "No",
-    "Nomor Responden",
-    "ID",
-}
-
-def clean_likert_data(df):
-    """
-    Replace invalid Likert values (99 / 999) with NaN.
-
-    Only applied to numeric columns whose valid scale is 1–6.
-    Queue duration, NPS, IDs, and other numeric variables are ignored.
-    """
-
-    df = df.copy()
-
-    for col in df.columns:
-
-        if col in EXCLUDED_COLUMNS:
-            continue
-
-        series = pd.to_numeric(df[col], errors="coerce")
-
-        if series.notna().sum() == 0:
-            continue
-
-        unique_values = set(series.dropna().unique())
-
-        # only process columns that look like Likert variables
-        if unique_values.issubset(
-            set(range(LIKERT_MIN, LIKERT_MAX + 1))
-            | {99, 999}
-        ):
-
-            df[col] = (
-                series
-                .replace([99, 999], np.nan)
-            )
-
-    return df
-
-# ──────────────────────────────────────────────────────────────────────────────
-# HELPER: PEMBACA GAMBAR (disalin dari kpi_cards.py)
-# ──────────────────────────────────────────────────────────────────────────────
-def get_image_base64(image_path):
-    if os.path.exists(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
-    return ""
 
 TOUCHPOINT_TRANSLATION = {
     "1. Citra Merek & Hubungan Emosional":
@@ -126,8 +65,6 @@ TOUCHPOINT_TRANSLATION = {
 # ---------------------------------------------------------------------------
 @st.cache_data
 def calculate_branch_performance(df, df_mapping):
-    df = clean_likert_data(df)
-
     harapan_cols = df_mapping['Nama Kolom KPI Harapan / Deskripsi'].tolist()
     realita_cols = df_mapping['Nama Kolom KPI Bank XYZ / Fisik'].tolist()
     
@@ -174,7 +111,6 @@ def calculate_branch_performance(df, df_mapping):
 # 3. SUB-PAGE 2A COMPONENTS
 # ---------------------------------------------------------------------------
 def render_scorecards_2a(df, branch_summary):
-    df = clean_likert_data(df)
     if branch_summary.empty: return
 
     kpi_cols = st.columns(4)
@@ -183,37 +119,25 @@ def render_scorecards_2a(df, branch_summary):
     avg_csi = branch_summary['CSI'].mean()
     avg_nps = branch_summary['NPS'].mean()
 
-    def build_kpi_html(title, value, subtitle, img_path):
-        """Style identik dengan kpi_cards.py: ikon 80px + teks 12/24/11px."""
-        img_b64 = get_image_base64(img_path)
-        img_tag = (
-            f'<img src="data:image/png;base64,{img_b64}" alt="icon" '
-            f'style="width:80px;height:80px;object-fit:contain;flex-shrink:0;margin-left:-15px;">'
-            if img_b64 else ""
-        )
+    def build_kpi_html(title, value, subtitle=""):
         return (
-            '<div style="display:flex;align-items:center;gap:10px;height:90px;">'
-            + img_tag
-            + '<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;">'
-            + f'<div class="kpi-title" style="margin-bottom:2px;font-size:12px;">{title}</div>'
-            + f'<div class="kpi-value-large" style="font-size:24px;line-height:1;">{value}</div>'
-            + f'<div class="kpi-subtitle" style="margin-top:4px;font-size:11px;font-weight:600;">{subtitle}</div>'
-            + '</div>'
-            + '</div>'
+            '<div style="display: flex; align-items: center; gap: 10px; height: 90px;">'
+                '<div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">'
+                    f'<div class="kpi-title" style="margin-bottom: 2px; font-size: 13px; text-transform: uppercase;">{title}</div>'
+                    f'<div class="kpi-value-large" style="font-size: 28px; line-height: 1.2;">{value}</div>'
+                    f'<div class="kpi-subtitle" style="margin-top: 4px; font-size: 11px; font-weight: 600;">{subtitle}</div>'
+                '</div>'
+            '</div>'
         )
 
     with kpi_cols[0]:
-        with st.container(key="card_kpi_1"):
-            st.markdown(build_kpi_html("Total Respondents", f"{total_resp:,}", "Complete Dataset", "assets/respondent.png"), unsafe_allow_html=True)
+        with st.container(key="card_kpi_1"): st.markdown(build_kpi_html("Total Respondents", f"{total_resp:,}", "Complete Dataset"), unsafe_allow_html=True)
     with kpi_cols[1]:
-        with st.container(key="card_kpi_2"):
-            st.markdown(build_kpi_html("Total Branches", f"{total_branch:,}", "Active Branches", "assets/cabang.png"), unsafe_allow_html=True)
+        with st.container(key="card_kpi_2"): st.markdown(build_kpi_html("Total Branches", f"{total_branch:,}", "Active Branches"), unsafe_allow_html=True)
     with kpi_cols[2]:
-        with st.container(key="card_kpi_3"):
-            st.markdown(build_kpi_html("National Avg CSI", f"{avg_csi:.1f}%", "IPA Weighting", "assets/csi.png"), unsafe_allow_html=True)
+        with st.container(key="card_kpi_3"): st.markdown(build_kpi_html("National Avg CSI", f"{avg_csi:.1f}%", "IPA Weighting"), unsafe_allow_html=True)
     with kpi_cols[3]:
-        with st.container(key="card_kpi_4"):
-            st.markdown(build_kpi_html("National Avg NPS", f"{avg_nps:.1f}", "Net Promoter Score", "assets/nps.png"), unsafe_allow_html=True)
+        with st.container(key="card_kpi_4"): st.markdown(build_kpi_html("National Avg NPS", f"{avg_nps:.1f}", "Net Promoter Score"), unsafe_allow_html=True)
             
     st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
 
@@ -300,8 +224,6 @@ def render_controls_2b(df, df_mapping):
     return selected_branches, selected_category
 
 def render_touchpoint_heatmap(df, df_mapping, selected_branches, selected_category):
-    df = clean_likert_data(df)
-
     if len(selected_branches) == 0:
         return
 
